@@ -1,0 +1,101 @@
+#!/bin/bash
+
+###
+### Note: This doesn't work, the API endpoint seems to be no longer supported
+###
+
+verify_dependencies(){
+  if ! [ -x "$(command -v jq)" ]; then
+    echo 'Error: jq is not installed.' >&2
+    exit 1
+  fi
+
+  if ! [ -x "$(command -v curl)" ]; then
+    echo 'Error: curl is not installed.' >&2
+    exit 1
+  fi
+}
+
+parse_cmd_line_args(){
+  while [[ $# -gt 0 ]]
+  do
+    key="$1"
+    case $key in
+        -u|--username)
+        USERNAME="$2"
+        shift # past argument
+        ;;
+        -p|--password)
+        PASSWORD="$2"
+        shift # past argument
+        ;;
+        -e|--endpoint)
+        API_ENDPOINT="$2"
+        shift # past argument
+        ;;
+        -k|--key_name)
+        KEY_NAME="$2"
+        shift # past argument
+        ;;
+        *)
+        # unknown option
+        ;;
+    esac
+    shift # past argument or value
+  done
+}
+
+init(){
+  #Check if .env file exists
+  if [ -f .env ]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ $line =~ ^[^#]*=.* ]]; then
+        export "$line"
+      fi
+    done < .env
+  fi
+
+  # Check if the required variables are set
+  if [ -z "$API_KEY" ]; then
+    if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+        echo "Error: USERNAME and PASSWORD must be set in .env file or in environment variables"
+        exit 1
+    fi
+  fi
+
+  # Set the API endpoint and your authentication credentials
+  API_ENDPOINT=${API_ENDPOINT:-"https://api.openai.com/v2/api-keys"}
+  KEY_NAME=${KEY_NAME:-"My new key"}
+
+  parse_cmd_line_args "$@"
+}
+
+main(){
+  verify_dependencies
+  init "$@"
+
+  if [ -z "$API_KEY" ]; then
+    # Create an encoded version of your credentials for the Authorization header
+    CREDENTIALS=$(echo -n ${USERNAME}:${PASSWORD} | base64)
+    AUTHORIZATION="Authorization: Basic ${CREDENTIALS}"
+  else
+    # Create an encoded version of your credentials for the Authorization header
+    CREDENTIALS=$(echo -n ${API_KEY} | base64)
+    AUTHORIZATION="Authorization: Bearer ${CREDENTIALS}"
+  fi
+
+  # Make the API request to create a new API key
+  set -x
+  response=$(curl -s -X POST -H "Content-Type: application/json" -H "${AUTHORIZATION}" -d "{\"name\": \"${KEY_NAME}\"}" ${API_ENDPOINT})
+  set +x
+
+  echo "Response: $response"
+
+  # Extract the new API key from the response
+  new_api_key=$(echo ${response} | jq -r '.api_key')
+
+  # Print the new API key
+  echo "New API key: ${new_api_key}"
+}
+
+main "$@"

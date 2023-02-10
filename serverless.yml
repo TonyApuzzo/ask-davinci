@@ -1,0 +1,17 @@
+service: AskDavinci
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: dev
+  region: us-east-1
+  environment:
+    OPENAI_API_KEY: ${env:OPENAI_API_KEY}
+
+functions:
+  alexa:
+    handler: index.handler
+    events:
+      - alexaSkill: amzn1.ask.skill.2e69a7a0-2f1e-4619-93af-d7713dab387d
